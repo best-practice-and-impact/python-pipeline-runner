@@ -11,6 +11,7 @@ from constants import SOME_SCALAR
 
 # Although the methods are trivial, this approach keeps the logic defined separately and testable
 # It also doesn't care if these are series, scalar values, numpy arrays etc
+
 column_3 = sum_series(column_1, column_2)
 column_4 = add_scalar_to_series(column_3, SOME_SCALAR)
 

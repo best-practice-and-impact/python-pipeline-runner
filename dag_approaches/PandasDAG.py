@@ -4,7 +4,7 @@ Doesn't work, but has the rough outline of what I was looking for
 """
 
 import pandas as pd
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union, get_type_hints
 
 class PandasDAG:
     def __init__(self, input_data: pd.DataFrame) -> None:
@@ -23,9 +23,11 @@ class PandasDAG:
 
     def add_task(self, func: Any, output_col: str, **kwargs: Any) -> None:
         dependencies = []
-        for arg_name, arg_type in func.__annotations__.items():
+        for arg_name, arg_type in get_type_hints(func).items():
+            if arg_name == "return":
+                continue
             if arg_type in (pd.Series, int, float):
-                dependencies.append(arg_name)
+                dependencies.append(kwargs[arg_name])
 
         self.nodes[output_col] = (None, func, kwargs)
         self.dependencies[output_col] = set(dependencies)
@@ -36,15 +38,15 @@ class PandasDAG:
                 if value is not None:
                     continue
 
-                if all(self.nodes[col][0] is not None for col in self.dependencies[node]):
-                    inputs = []
-                    for col in self.dependencies[node]:
-                        if col in self.scalars:
-                            inputs.append(self.scalars[col])
-                        else:
-                            inputs.append(self.nodes[col][0])
-                    output = func(*inputs, **kwargs)
-                    self.nodes[node] = (output, func, kwargs)
+                parameters = dict()
+                for col in self.dependencies[node]:
+                    if col in self.scalars:
+                        parameters[col] = self.scalars[col]
+                    else:
+                        parameters[col] = self.nodes[col][0]
+                print(f"{func.__name__} {parameters}",)
+                output = func(**parameters)
+                self.nodes[node] = (output, func, kwargs)
 
         output_data = {}
         for col in self.nodes:
