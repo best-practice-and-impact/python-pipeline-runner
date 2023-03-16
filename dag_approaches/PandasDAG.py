@@ -1,3 +1,14 @@
+"""
+Delayed evaluation of a set of pandas transformations. Lends itself to a config-driven pipeline definition.
+
+Improvements might include:
+- supporting methods that take parameters that are not nodes (e.g. bool flag). However, not having this does encourage simple function definitions.
+- if the above is implemented, we might want to consider more explicit definition of nodes as parameters
+- using the list of desired output columns to filter the DAG and only execute necessary transformations
+- better error reporting
+"""
+
+
 from graphlib import TopologicalSorter
 import pandas as pd
 from typing import Any, get_type_hints
@@ -26,7 +37,7 @@ class PandasDAG:
             if arg_type in (pd.Series, int, float):
                 dependencies.append(kwargs[arg_name])
             else:
-                raise ValueError("Parameter is not a valid type. {arg_name} is type {arg_type}")
+                raise ValueError("Parameter is an unsupported node type. {arg_name} is type {arg_type}")
 
         self.nodes[output_column] = (None, func, kwargs)
         self.edges[output_column] = set(dependencies)
@@ -36,8 +47,10 @@ class PandasDAG:
         orderded_nodes = list(graph.static_order())
 
         for node_name in orderded_nodes:
-            source_data, fn, parameters = self.nodes[node_name]
+            if node_name not in self.nodes:
+                raise ValueError(f"Parameter is not a node: {node_name}")
 
+            source_data, fn, parameters = self.nodes[node_name]
             if source_data is not None:
                 continue
 
