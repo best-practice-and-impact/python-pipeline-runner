@@ -1,57 +1,62 @@
-"""
-Written in collab with ChatGPT
-Doesn't work, but has the rough outline of what I was looking for
-"""
-
+from graphlib import TopologicalSorter
 import pandas as pd
-from typing import Any, Dict, List, Tuple, Union, get_type_hints
+from typing import Any, get_type_hints
+from collections import namedtuple
+
+Node = namedtuple("Node", ["source_data", "fn", "parameters"])
 
 class PandasDAG:
     def __init__(self, input_data: pd.DataFrame) -> None:
         self.input_data = input_data
         self.nodes = {}
-        self.dependencies = {}
-        self.scalars = {}
+        self.edges = {}
 
         # Create initial nodes from input_data
         for col in input_data.columns:
-            self.nodes[col] = (input_data[col], None, {} )
-            self.dependencies[col] = set()
+            self.nodes[col] = Node(input_data[col], None, {})
 
     def add_scalar(self, name: str, value: Any) -> None:
-        self.scalars[name] = value
+        self.nodes[name] = Node(value, None, {})
 
-    def add_task(self, func: Any, output_col: str, **kwargs: Any) -> None:
+    def add_task(self, func: Any, output_column: str, **kwargs: Any) -> None:
         dependencies = []
         for arg_name, arg_type in get_type_hints(func).items():
             if arg_name == "return":
                 continue
             if arg_type in (pd.Series, int, float):
                 dependencies.append(kwargs[arg_name])
+            else:
+                raise ValueError("Parameter is not a valid type. {arg_name} is type {arg_type}")
 
-        self.nodes[output_col] = (None, func, kwargs)
-        self.dependencies[output_col] = set(dependencies)
+        self.nodes[output_column] = (None, func, kwargs)
+        self.edges[output_column] = set(dependencies)
 
     def run(self) -> pd.DataFrame:
-        while len(self.nodes) > len(self.input_data.columns):
-            for node, (value, func, kwargs) in self.nodes.items():
-                if value is not None:
-                    continue
+        graph = TopologicalSorter(self.edges)
+        orderded_nodes = list(graph.static_order())
 
-                parameters = dict()
-                for col in self.dependencies[node]:
-                    if col in self.scalars:
-                        parameters[col] = self.scalars[col]
-                    else:
-                        parameters[col] = self.nodes[col][0]
-                print(f"{func.__name__} {parameters}",)
-                output = func(**parameters)
-                self.nodes[node] = (output, func, kwargs)
+        for node_name in orderded_nodes:
+            source_data, fn, parameters = self.nodes[node_name]
 
+            if source_data is not None:
+                continue
+
+            parsed_parameters = dict()
+            for keyword, value in parameters.items():
+                if value not in self.nodes:
+                    raise ValueError("No node named {value}")
+                parsed_parameters[keyword] = self.nodes[value][0]
+        
+            output = fn(**parsed_parameters)
+            self.nodes[node_name] = Node(output, None, {})
+
+        
         output_data = {}
         for col in self.nodes:
             if col not in self.input_data.columns:
                 output_data[col] = self.nodes[col][0]
+            else:
+                output_data[col] = input_data[col]
 
         return pd.DataFrame(output_data)
 
