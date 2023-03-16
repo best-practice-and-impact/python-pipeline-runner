@@ -44,9 +44,9 @@ class PandasDAG:
 
     def run(self) -> pd.DataFrame:
         graph = TopologicalSorter(self.edges)
-        orderded_nodes = list(graph.static_order())
+        ordered_nodes = list(graph.static_order())
 
-        for node_name in orderded_nodes:
+        for node_name in ordered_nodes:
             if node_name not in self.nodes:
                 raise ValueError(f"Parameter is not a node: {node_name}")
 
